@@ -1,33 +1,30 @@
-// --- VARIABEL GLOBAL DAN LOCAL STORAGE ---
 const LS_SETTINGS_KEY = 'photoSettings';
 const LS_RESULTS_KEY = 'photoResults';
 let editorCanvases = [];
 let originalDataURLs = [];
 let currentFilter = 'none'
-// Fungsi untuk mendapatkan DataURL dari LocalStorage
 function getPhotoResults() {
     const results = localStorage.getItem(LS_RESULTS_KEY);
     return results ? JSON.parse(results) : [];
 }
-// Fungsi untuk membersihkan LocalStorage saat Retake/Mulai Baru
+
 function clearLocalStorage() {
     localStorage.removeItem(LS_SETTINGS_KEY);
     localStorage.removeItem(LS_RESULTS_KEY);
     localStorage.removeItem('editIndex');
 }
-// --- LOGIKA UTAMA (Deteksi Halaman) ---
+
+// --- LOGIKA UTAMA (Deteksi Halaman Kamera) ---
 if (document.getElementById('camera-page')) {
-    document.addEventListener('DOMContentLoaded', () => {
+    document.addEventListener('DOMContentLoaded', async () => {
         const video = document.getElementById("video");
         const countdownOverlay = document.getElementById("countdown-overlay");
         const photoSlots = document.getElementById("photo-slots");
         const cameraControls = document.getElementById("camera-controls");
-        const resultsColumn = document.getElementById("results-column");
-        const resultsTitle = document.getElementById("results-title");
-        const videoWrapper = document.getElementById("video-wrapper"); // Dideklarasikan di sini
-        
+        const videoWrapper = document.getElementById("video-wrapper");
+
         let capturedDataURLs = [];
-        
+
         const settings = JSON.parse(localStorage.getItem(LS_SETTINGS_KEY));
         if (!settings) {
             alert("Pengaturan tidak ditemukan. Kembali ke halaman awal.");
@@ -37,24 +34,35 @@ if (document.getElementById('camera-page')) {
 
         const { shotCount, delayTime } = settings;
 
-        // --- SETUP AWAL ---
+        // buat slot foto
         createPhotoSlots(shotCount, photoSlots);
-        
-        // Panggil getUserMedia saat elemen sudah pasti ada
-        navigator.mediaDevices.getUserMedia({ video: true }).then((stream) => {
+
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
             video.srcObject = stream;
-            
+
+            await new Promise(resolve => {
+                video.onloadedmetadata = () => resolve();
+            });
+
             setTimeout(() => {
-                 startCaptureSeries(shotCount, delayTime, video, countdownOverlay, photoSlots, capturedDataURLs, cameraControls, resultsColumn, resultsTitle, videoWrapper);
-            }, 1000); 
-            
-        }).catch(error => {
+                startCaptureSeries(
+                    shotCount,
+                    delayTime,
+                    video,
+                    countdownOverlay,
+                    photoSlots,
+                    capturedDataURLs,
+                    cameraControls,
+                    videoWrapper
+                );
+            }, 8);
+        } catch (error) {
             alert("Gagal mengakses kamera. Mohon periksa izin browser.");
             console.error("Camera access error:", error);
             window.location.href = 'index.html';
-        });
-    }); // Akhir dari DOMContentLoaded
-    
+        }
+    });
 }else if (document.getElementById('editor-page')) {
 
     document.addEventListener('DOMContentLoaded', async () => {
@@ -63,12 +71,19 @@ if (document.getElementById('camera-page')) {
 
         const downloadBtn = document.getElementById("download-strip-btn");
         const backBtn = document.getElementById("back-to-results-btn");
-
         const bwBtn = document.getElementById('bw-filter-btn');
-        let isBW = false;
-
         const sepiaBtn = document.getElementById('sepia-filter-btn');
+        const stripControls = document.getElementById('strip-style-controls');
+
+        let isBW = false;
         let isSepia = false;
+
+        const settings = JSON.parse(localStorage.getItem(LS_SETTINGS_KEY));
+        if (settings && settings.shotCount === 6) {
+            stripControls.style.display = 'block';
+        } else {
+            stripControls.style.display = 'none';
+        }
 
         originalDataURLs = results;
 
@@ -77,26 +92,33 @@ if (document.getElementById('camera-page')) {
             return;
         }
 
-        // 1️⃣ Muat foto ke canvas individual dulu
         await loadStripCanvases(stripContainer, originalDataURLs);
 
-        // 2️⃣ Setelah semua foto siap, render hasil akhir
+        const bgPicker = document.getElementById('bgColorPicker');
+        const borderPicker = document.getElementById('borderColorPicker');
         setTimeout(() => {
-            const finalCanvas = createFinalStripCanvas(isBW, isSepia);
-            stripContainer.innerHTML = ""; // hapus preview lama
-            stripContainer.appendChild(finalCanvas); // tampilkan hasil final
+            const bgColor = bgPicker ? bgPicker.value : "#ff70a6";
+            const borderColor = borderPicker ? borderPicker.value : "#fc0065";
+
+            const finalCanvas = createFinalStripCanvas(isBW, isSepia, bgColor, borderColor);
+            stripContainer.innerHTML = ""; 
+            stripContainer.appendChild(finalCanvas); 
         }, 500);
 
-        // 3️⃣ Tombol Download (langsung pakai hasil final)
+
         downloadBtn.onclick = function() {
-            const finalCanvas = createFinalStripCanvas(isBW, isSepia);
+           const bgPicker = document.getElementById('bgColorPicker');
+            const borderPicker = document.getElementById('borderColorPicker');
+            const bgColor = bgPicker ? bgPicker.value : "#ff70a6";
+            const borderColor = borderPicker ? borderPicker.value : "#fc0065";
+
+            const finalCanvas = createFinalStripCanvas(isBW, isSepia, bgColor, borderColor);
             const link = document.createElement('a');
             link.download = `photo_strip_${Date.now()}.png`;
             link.href = finalCanvas.toDataURL("image/png");
             link.click();
         };
 
-        // 4️⃣ Tombol Kembali
         backBtn.onclick = function() {
             clearLocalStorage();
             window.location.href = 'index.html';
@@ -106,7 +128,15 @@ if (document.getElementById('camera-page')) {
             isBW = !isBW;
             bwBtn.classList.toggle('active');
 
-            const finalCanvas = createFinalStripCanvas(isBW, isSepia); // <-- pakai isBW
+            const bgPicker = document.getElementById('bgColorPicker');
+            const borderPicker = document.getElementById('borderColorPicker');
+
+            const bgColor = bgPicker ? bgPicker.value : "#ff70a6";
+            const borderColor = borderPicker ? borderPicker.value : "#fc0065";
+
+            const finalCanvas = createFinalStripCanvas(isBW, isSepia, bgColor, borderColor);
+            stripContainer.innerHTML = '';
+            stripContainer.appendChild(finalCanvas);
             stripContainer.innerHTML = '';
             stripContainer.appendChild(finalCanvas);
         });
@@ -115,13 +145,34 @@ if (document.getElementById('camera-page')) {
             isSepia = !isSepia;
             sepiaBtn.classList.toggle('active');
 
-            // render ulang preview, bisa tambahin parameter ke createFinalStripCanvas
-            const finalCanvas = createFinalStripCanvas(isBW, isSepia);
+            const bgPicker = document.getElementById('bgColorPicker');
+            const borderPicker = document.getElementById('borderColorPicker');
+
+            const bgColor = bgPicker ? bgPicker.value : "#ff70a6";
+            const borderColor = borderPicker ? borderPicker.value : "#fc0065";
+
+            const finalCanvas = createFinalStripCanvas(isBW, isSepia, bgColor, borderColor);
+            stripContainer.innerHTML = '';
+            stripContainer.appendChild(finalCanvas);
             stripContainer.innerHTML = '';
             stripContainer.appendChild(finalCanvas);
         });
+
+        if (bgPicker && borderPicker) {
+            const updateStripColors = () => {
+                const bgColor = bgPicker.value;
+                const borderColor = borderPicker.value;
+                const finalCanvas = createFinalStripCanvas(isBW, isSepia, bgColor, borderColor);
+                stripContainer.innerHTML = '';
+                stripContainer.appendChild(finalCanvas);
+            };
+
+            bgPicker.addEventListener('input', updateStripColors);
+            borderPicker.addEventListener('input', updateStripColors);
+        }
     });
 }
+
 
 
 // ----------------------------------------------------------------------
@@ -170,11 +221,12 @@ const runCountdown = (delay, countdownOverlay) => {
     });
 };
 
-const capturePhoto = (slotIndex, video, capturedDataURLs) => {
+function capturePhoto(slotIndex, video, capturedDataURLs) {
     const canvas = document.createElement("canvas");
     const context = canvas.getContext("2d");
-    canvas.width = video.videoWidth; 
+    canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
+
     context.drawImage(video, 0, 0, canvas.width, canvas.height);
     const dataURL = canvas.toDataURL("image/png");
 
@@ -186,57 +238,60 @@ const capturePhoto = (slotIndex, video, capturedDataURLs) => {
         slotElement.classList.add('slot-filled');
         slotElement.style.border = '3px solid #ff70a6';
 
-        const img = document.createElement("img");
+        const img = new Image();
         img.src = dataURL;
-        img.style.width = '100%';
-        img.style.height = '100%';
-        img.style.objectFit = 'cover';
-        img.style.borderRadius = '6px';
+        img.style.cssText = `
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 6px;
+        `;
         slotElement.appendChild(img);
 
         const downloadBtn = document.createElement("a");
         downloadBtn.href = dataURL;
         downloadBtn.download = `photo_${slotIndex + 1}_${Date.now()}.png`;
         downloadBtn.textContent = '↓';
+        downloadBtn.classList.add('download-btn');
         slotElement.appendChild(downloadBtn);
     }
-};
+}
 
-async function startCaptureSeries(shots, delay, video, countdownOverlay, photoSlots, capturedDataURLs, cameraControls, resultsColumn, resultsTitle, videoWrapper) {
+// --- Proses Capture Series ---
+async function startCaptureSeries(shots, delay, video, countdownOverlay, photoSlots, capturedDataURLs, cameraControls, videoWrapper) {
     for (let i = 0; i < shots; i++) {
-        let slotElement = document.getElementById(`slot-${i}`);
-        
-        countdownOverlay.textContent = `Shot ${i + 1}/${shots}`;
-        countdownOverlay.style.fontSize = '80px'; 
+        const slot = document.getElementById(`slot-${i}`);
         countdownOverlay.style.display = 'flex';
-        await new Promise(resolve => setTimeout(resolve, 800)); 
-        
-        if(slotElement) slotElement.style.border = '3px solid red'; 
-        await runCountdown(delay, countdownOverlay); 
+        countdownOverlay.textContent = `Shot ${i + 1}/${shots}`;
+        countdownOverlay.style.fontSize = '80px';
+
+        await new Promise(res => setTimeout(res, 600));
+        if (slot) slot.style.border = '3px solid red';
+
+        await runCountdown(delay, countdownOverlay);
         capturePhoto(i, video, capturedDataURLs);
-        
-        await new Promise(resolve => setTimeout(resolve, 500)); 
+        await new Promise(res => setTimeout(res, 500));
     }
-    
-    // --- AKSI SETELAH SELESAI TAKE FOTO ---
+
     hideCountdown(countdownOverlay);
-    if (video.srcObject) { video.srcObject.getTracks().forEach(track => track.stop()); }
-    
-    // Simpan hasil
+    if (video.srcObject) video.srcObject.getTracks().forEach(track => track.stop());
+
     localStorage.setItem(LS_RESULTS_KEY, JSON.stringify(capturedDataURLs));
-    
-    // Tampilkan loader sementara
+
     videoWrapper.style.display = 'none';
-    
-    // Tambahkan loader ke DOM
-    const loaderElement = document.createElement('h3');
-    loaderElement.textContent = "Mengalihkan ke Editor...";
-    document.querySelector('.container').appendChild(loaderElement); 
-    
-    // PENGALIHAN PAKSA
+    const oldLoader = document.querySelector('#loading-to-editor');
+    if (oldLoader) oldLoader.remove();
+
+    const loader = document.createElement('h3');
+    loader.id = 'loading-to-editor';
+    loader.textContent = "Mengalihkan ke Editor...";
+    loader.style.textAlign = 'center';
+    loader.style.marginTop = '20px';
+    document.querySelector('.container').appendChild(loader);
+
     setTimeout(() => {
-        window.location.href = 'editor.html'; 
-    }, 5);
+        window.location.href = 'editor.html';
+    }, 8);
 }
 
 
@@ -250,7 +305,7 @@ function loadStripCanvases(container, dataURLs) {
             const canvas = document.createElement('canvas');
             canvas.width = img.width;
             canvas.height = img.height;
-            canvas.classList.add('editor-canvas'); // Kelas untuk styling
+            canvas.classList.add('editor-canvas'); 
             canvas.dataset.originalSrc = dataURL;
             
             const ctx = canvas.getContext('2d');
@@ -270,22 +325,18 @@ function downloadAllPhotos() {
         return;
     }
     
-    // KUNCI: PANGGIL FUNGSI UNTUK MEMBUAT SATU GAMBAR BESAR
-    const finalCanvas = createFinalStripCanvas(isBW, isSepia);
+    const finalCanvas = createFinalStripCanvas(isBW, isSepia, bgColor, borderColor);
 
     if (!finalCanvas) {
-        // Hapus console.error di createFinalStripCanvas agar hanya ada satu alert
         alert("Gagal membuat strip foto final."); 
         return;
     }
 
-    // Logika Download Komposit yang Kuat
     const dataURL = finalCanvas.toDataURL('image/png');
     const a = document.createElement('a');
     a.href = dataURL;
     a.download = `photo_strip_final_${Date.now()}.png`;
     
-    // Gunakan simulasi click yang paling kuat
     document.body.appendChild(a); 
     const event = new MouseEvent('click', { view: window, bubbles: true, cancelable: true });
     a.dispatchEvent(event);
@@ -293,46 +344,70 @@ function downloadAllPhotos() {
     
     alert("berhasil diunduh!");
 }
-
-
-// script.js (Ganti fungsi createFinalStripCanvas kamu)
-function createFinalStripCanvas(isBW = false, isSepia = false) {
+function createFinalStripCanvas(isBW = false, isSepia = false, bgColor = "#ff70a6", borderColor = "#fc0065") {
     const NUM_PHOTOS = editorCanvases.length;
-    const ctxFont = "bold 48px Inter, sans-serif";
-    const ctxTextColor = "#000000ff";
 
     if (NUM_PHOTOS === 1) {
-        // --- MODE 1 FOTO ---
-        const PHOTO_W = 1000;
-        const PHOTO_H = 800;
-        const TEXT_H = 150;
+    const PHOTO_W = 1000;
+    const PHOTO_H = 800;
 
-        const finalCanvas = document.createElement("canvas");
-        finalCanvas.width = PHOTO_W;
-        finalCanvas.height = PHOTO_H + TEXT_H;
-        const ctx = finalCanvas.getContext("2d");
+    const BOX_PADDING_TOP = 40;
+    const BOX_PADDING_LEFT = 40;
+    const BOX_PADDING_RIGHT = 40;
+    const BOX_PADDING_BOTTOM = 50;
 
-        // gambar foto
-        ctx.save();
-        let filterStr = '';
-        if (isBW) filterStr += 'grayscale(100%) ';
-        if (isSepia) filterStr += 'sepia(100%)';
-        ctx.filter = filterStr || 'none';
-        ctx.drawImage(editorCanvases[0], 0, 0, PHOTO_W, PHOTO_H);
-        ctx.restore();
+    const TEXT_PADDING_LEFT = 20; // jarak teks dari tepi kiri kotak
+    const TEXT_PADDING_TOP = 150;  // jarak teks dari atas foto
 
-        // kotak putih di bawah
-        ctx.fillStyle = "#fff";
-        ctx.fillRect(0, PHOTO_H, PHOTO_W, TEXT_H);
+    const HEADLINE_FONT = "bold 60px Inter, sans-serif";
+    const SUBHEAD_FONT = "bold 36px Inter, sans-serif";
+    const TEXT_COLOR = "#000";
 
-        // teks puitis
-        ctx.fillStyle = ctxTextColor;
-        ctx.font = ctxFont;
-        ctx.textAlign = "center";
-        ctx.fillText("The moon is beautiful, isn't it?", PHOTO_W / 2, PHOTO_H + TEXT_H / 2);
+    const headlineLines = ["The moon is beautiful,", "isn't it?"];
+    const subLines = ["Nyatanya sudut bumi manapun yang indah itu", "takkan indah jika tak bersamamu", "karena pada awalnya yang indah itu adalah kamu"];
+    const TEXT_AREA_HEIGHT = TEXT_PADDING_TOP + headlineLines.length * 70 + subLines.length * 40 + BOX_PADDING_BOTTOM;
 
-        return finalCanvas;
-    } else {
+    const BOX_WIDTH = PHOTO_W + BOX_PADDING_LEFT + BOX_PADDING_RIGHT;
+    const BOX_HEIGHT = PHOTO_H + TEXT_AREA_HEIGHT;
+
+    const finalCanvas = document.createElement("canvas");
+    finalCanvas.width = BOX_WIDTH;
+    finalCanvas.height = BOX_HEIGHT;
+    const ctx = finalCanvas.getContext("2d");
+
+    // Kotak putih dengan padding kanan/ kiri
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, BOX_WIDTH, BOX_HEIGHT);
+
+    // Gambar foto di dalam kotak putih
+    ctx.save();
+    let filterStr = '';
+    if (isBW) filterStr += 'grayscale(100%) ';
+    if (isSepia) filterStr += 'sepia(100%)';
+    ctx.filter = filterStr || 'none';
+    ctx.drawImage(editorCanvases[0], BOX_PADDING_LEFT, BOX_PADDING_TOP, PHOTO_W, PHOTO_H);
+    ctx.restore();
+
+    // Teks di bawah foto dengan padding kiri/atas
+    ctx.fillStyle = TEXT_COLOR;
+    ctx.textAlign = "left";
+    let currentY = PHOTO_H + TEXT_PADDING_TOP;
+    ctx.font = HEADLINE_FONT;
+    headlineLines.forEach(line => {
+        ctx.fillText(line, BOX_PADDING_LEFT + TEXT_PADDING_LEFT, currentY);
+        currentY += 70;
+    });
+
+    ctx.font = SUBHEAD_FONT;
+    subLines.forEach(line => {
+        ctx.fillText(line, BOX_PADDING_LEFT + TEXT_PADDING_LEFT, currentY);
+        currentY += 40;
+    });
+
+    return finalCanvas;
+    }
+
+    else {
         // --- MODE 6 FOTO (2 kolom x 3 baris) ---
         const COLS = 2;
         const ROWS = Math.ceil(NUM_PHOTOS / COLS);
@@ -351,11 +426,11 @@ function createFinalStripCanvas(isBW = false, isSepia = false) {
         finalCanvas.height = finalHeight;
         const ctx = finalCanvas.getContext("2d");
 
-        // background strip
-        ctx.fillStyle = "#ff70a6";
+        // background dan border pakai warna pilihan
+        ctx.fillStyle = bgColor;
         ctx.fillRect(0, 0, finalWidth, finalHeight);
         ctx.lineWidth = BORDER_W;
-        ctx.strokeStyle = "#fc0065";
+        ctx.strokeStyle = borderColor;
         ctx.strokeRect(0, 0, finalWidth, finalHeight);
 
         // gambar semua foto

@@ -10,16 +10,18 @@
     <div class="container" id="camera-page">
         <div id="camera-layout">
             <div id="capture-column">
-                <div id="video-wrapper">
-                    <video autoplay id="video"></video>
-                    <div id="countdown-overlay"></div> 
+
+                <div id="camera-background">
+                    <div id="video-wrapper">
+                        <div id="video-bg"></div>
+                        <video autoplay playsinline id="video"></video>
+                        <div id="countdown-overlay"></div>
+                    </div>
                 </div>
 
-                <div class="controls" id="camera-controls">
-                </div>
-                
-                <div id="photo-slots">
-                </div>
+                <div class="controls" id="camera-controls"></div>
+                <div id="photo-slots"></div>
+
             </div>
         </div>
     </div>

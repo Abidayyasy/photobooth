@@ -5,15 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Photo Booth - Pilih Mode</title>
     <link rel="stylesheet" href="style.css">
-
 </head>
 <body>
     <div class="container">
         <h2>Hai Cantik</h2>
+
         <div class="mode-selection">
             <div class="mode-card" id="mode-1">1 Foto</div>
             <div class="mode-card" id="mode-6">6 Foto</div>
         </div>
+
         <button id="start-camera-btn">Mulai Foto</button>
     </div>
 
@@ -21,9 +22,12 @@
         let selectedMode = 6; // default 6 foto
         const mode1 = document.getElementById("mode-1");
         const mode6 = document.getElementById("mode-6");
+        const bgCards = document.querySelectorAll('.bg-card');
+        let selectedBgColor = "default";
 
+        // update tampilan mode yang dipilih
         function updateSelection() {
-            if(selectedMode === 1) {
+            if (selectedMode === 1) {
                 mode1.classList.add("selected");
                 mode6.classList.remove("selected");
             } else {
@@ -42,17 +46,29 @@
             updateSelection();
         });
 
-        updateSelection(); // set initial selection
+        updateSelection(); // set awal
 
+        // simpan background color ke localStorage
+        bgCards.forEach(card => {
+            card.addEventListener('click', () => {
+                bgCards.forEach(c => c.classList.remove('selected'));
+                card.classList.add('selected');
+                selectedBgColor = card.dataset.color;
+                localStorage.setItem("videoBgColor", selectedBgColor);
+            });
+        });
+
+        // tombol mulai
         document.getElementById("start-camera-btn").addEventListener("click", () => {
-            // timer otomatis 3 detik
             const delayTime = 3;
 
-            // simpan pengaturan ke localStorage
+            // simpan pengaturan foto
             const settings = { shotCount: selectedMode, delayTime: delayTime };
             localStorage.setItem('photoSettings', JSON.stringify(settings));
 
-            // pindah ke halaman kamera
+            // simpan warna terakhir
+            localStorage.setItem("videoBgColor", selectedBgColor);
+
             window.location.href = 'camera.html';
         });
     </script>
